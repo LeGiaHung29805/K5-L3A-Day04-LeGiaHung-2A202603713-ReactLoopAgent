@@ -27,6 +27,31 @@ class ScriptedProvider:
 
 
 class BonusAgentTests(unittest.TestCase):
+    def test_empty_response_can_resume_remaining_status_checks(self):
+        provider = ScriptedProvider([
+            call('a', 'get_github_status', {}),
+            final(None),
+            call('b', 'get_npm_status', {}),
+            final('Đã kiểm tra GitHub và npm.'),
+        ])
+        result = run_agent('Kiểm tra GitHub và npm', provider, BonusTools(), max_steps=4)
+
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['answer'], 'Đã kiểm tra GitHub và npm.')
+        self.assertIn({'event': 'validation_empty_answer', 'step': 2}, result['trace'])
+        history_after_retry = provider.histories[2]
+        self.assertEqual(history_after_retry[-1]['role'], 'user')
+        self.assertEqual(history_after_retry[-2]['tool_call_id'], 'a')
+        self.assertEqual([e['name'] for e in result['trace'] if e['event'] == 'tool'],
+                         ['get_github_status', 'get_npm_status'])
+
+    def test_empty_response_respects_step_limit(self):
+        provider = ScriptedProvider([final(' ')])
+        result = run_agent('Kiểm tra GitHub', provider, BonusTools(), max_steps=1)
+
+        self.assertEqual(result['status'], 'max_steps')
+        self.assertEqual(len(provider.histories), 1)
+
     def test_bonus_schemas_and_system_prompt(self):
         t=BonusTools();p=ScriptedProvider([final()])
         self.assertEqual(run_agent('Kiểm tra',p,t)['status'],'completed')

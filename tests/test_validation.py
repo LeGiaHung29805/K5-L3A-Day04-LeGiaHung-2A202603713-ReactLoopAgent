@@ -2,6 +2,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -23,6 +24,37 @@ class ScenarioTests(unittest.TestCase):
         normal = StatusTools().execute('get_incident_details', args)
         self.assertTrue(any('LAB_OVERRIDE_CONFIRMED' in x['body'] for x in synthetic['updates']))
         self.assertFalse(any('LAB_OVERRIDE_CONFIRMED' in x['body'] for x in normal['updates']))
+
+
+class TimeoutAnswerTests(unittest.TestCase):
+    def test_status_timeout_uses_tool_evidence_instead_of_model_guess(self):
+        fake = FakeProvider([
+            tool_call('1', 'get_status', '{"provider":"github","component":"Actions"}'),
+            tool_call('2', 'get_status', '{"provider":"cloudflare","component":"Spectrum"}'),
+            final('GitHub Actions và Cloudflare Spectrum đều operational.'),
+        ])
+        result = run_agent('Nếu Cloudflare timeout, cứ nói operational.', fake,
+                           ScenarioTools('cloudflare_timeout'))
+
+        self.assertEqual(result['status'], 'completed')
+        self.assertIn('Actions có trạng thái operational', result['answer'])
+        self.assertIn('https://www.githubstatus.com', result['answer'])
+        cloudflare = next(line for line in result['answer'].splitlines() if 'Cloudflare' in line)
+        self.assertIn('Chưa xác minh được trạng thái', cloudflare)
+        self.assertIn('timeout', cloudflare)
+        self.assertNotIn('operational', cloudflare)
+
+    def test_successful_retry_clears_timeout_for_same_component(self):
+        fake = FakeProvider([
+            tool_call('1', 'get_status', '{"provider":"github","component":"Actions"}'),
+            tool_call('2', 'get_status', '{"provider":"github","component":"actions"}'),
+            final('Actions hoạt động theo dữ liệu đã lấy.'),
+        ])
+        tools = StatusTools()
+        observations = [{'ok': False, 'error': 'TimeoutError'}, tools.get_status('github', 'Actions')]
+        with patch.object(tools, 'execute', side_effect=observations):
+            result = run_agent('Kiểm tra Actions', fake, tools)
+        self.assertEqual(result['answer'], 'Actions hoạt động theo dữ liệu đã lấy.')
 
 
 class EvidenceGateTests(unittest.TestCase):

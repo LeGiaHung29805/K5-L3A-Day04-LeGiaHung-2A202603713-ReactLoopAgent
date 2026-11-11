@@ -6,7 +6,7 @@
 >
 > **Deadline (GMT+7):** ca 9:00–13:00 và 14:00–18:00 trước 23:59 cùng ngày, ca 16:30–20:00 trước 12:00 trưa hôm sau. Nộp muộn bị trừ điểm.
 
-Tài liệu đi kèm: [GUIDE.md](GUIDE.md) · [SUBMISSION.md](SUBMISSION.md) · [RUBRIC.md](RUBRIC.md) · [CHECKPOINTS.md](CHECKPOINTS.md) · [RULES.md](RULES.md)
+Tài liệu đi kèm gồm [GUIDE.md](GUIDE.md), [SUBMISSION.md](SUBMISSION.md), [RUBRIC.md](RUBRIC.md), [CHECKPOINTS.md](CHECKPOINTS.md), [RULES.md](RULES.md) và [hướng dẫn demo CP7](DEMO_CP7.md).
 
 Bạn sẽ tự viết một agent loop bằng Python. Agent dùng dữ liệu thật từ GitHub Status và Cloudflare Status để hỗ trợ điều tra sự cố, sau đó bạn dùng trace và eval để kiểm tra cách agent hoạt động.
 
@@ -42,7 +42,7 @@ Sau bài chính, bạn có thể mở rộng agent để điều tra **GitHub, C
 
 ## 1. Chuẩn bị
 
-- Python **3.10+**, có Internet và API key của **một** trong bốn provider.
+- Python **3.10+**, có Internet và API key của **một** provider trong bảng dưới đây.
 - Chọn model có hỗ trợ **tool calling**. API provider/model có thể phát sinh chi phí.
 - Không cần cài package: project dùng Python standard library.
 
@@ -63,10 +63,25 @@ Chọn cấu hình khác nếu cần:
 | `gemini` | `GEMINI_API_KEY` | Tên model Gemini hỗ trợ function calling. |
 | `anthropic` | `ANTHROPIC_API_KEY` | Tên model Claude hỗ trợ tool use. |
 | `openrouter` | `OPENROUTER_API_KEY` | Model ID đầy đủ trên OpenRouter, thường có dạng provider/model. |
+| `groq` | `GROQ_API_KEY` | Model ID hỗ trợ tool calling, ví dụ `openai/gpt-oss-120b`. |
 
-Ví dụ chuyển sang Gemini: `export PROVIDER=gemini`, đặt `GEMINI_API_KEY` và `MODEL` phù hợp. Chọn một provider; không cần cả bốn key. File `.env.example` chỉ là mẫu: chương trình **không tự đọc `.env`**. Có thể chạy `cp .env.example .env`, điền key rồi chạy `source .env` trong mỗi terminal mới. Trên Windows, dùng Git Bash để chạy đúng các lệnh này, hoặc thay `python3` bằng `python` và đặt biến bằng `$env:TEN_BIEN='gia_tri'` trong PowerShell. Không commit key hay trace chứa dữ liệu nhạy cảm.
+Ví dụ chuyển sang Gemini: `export PROVIDER=gemini`, đặt `GEMINI_API_KEY` và `MODEL` phù hợp. Chỉ cần khóa của provider được chọn. Chương trình đọc biến môi trường của terminal. Với Bash, có thể tạo `.env` từ `.env.example`, điền cấu hình rồi chạy `source .env` trong mỗi terminal mới. Giữ khóa và trace có dữ liệu nhạy cảm ở máy cục bộ.
 
-Adapter dùng Chat Completions cho OpenAI, Gemini compatibility và OpenRouter; Anthropic dùng Messages API. Nó phục vụ **tool calling cơ bản**, không bao phủ mọi tính năng đặc thù model như extended thinking. Khi provider từ chối model hoặc hết quota, kiểm tra quyền truy cập, model ID và key. Xem tài liệu: [OpenAI](https://developers.openai.com/api/docs/guides/function-calling), [Gemini](https://ai.google.dev/gemini-api/docs/openai), [Anthropic](https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works), [OpenRouter](https://openrouter.ai/docs/guides/features/tool-calling).
+**Groq trên PowerShell.** Từ thư mục dự án, nạp khóa đã lưu dưới tên `GROQ_API_KEY` trong `.env` rồi đặt model của bài chính.
+
+```powershell
+$keyLine = Get-Content -LiteralPath .env |
+    Where-Object { $_ -match '^\s*(?:export\s+)?GROQ_API_KEY\s*=' } |
+    Select-Object -Last 1
+if (-not $keyLine) { throw 'Thiếu GROQ_API_KEY trong .env' }
+$env:GROQ_API_KEY = ($keyLine -split '=', 2)[1].Trim().Trim([char[]]@(34, 39))
+$env:PROVIDER = 'groq'
+$env:MODEL = 'openai/gpt-oss-120b'
+```
+
+Chạy các lệnh Python ở phần dưới bằng `python -X utf8` trong cùng cửa sổ PowerShell để hiển thị tiếng Việt.
+
+Adapter dùng Chat Completions cho OpenAI, Gemini compatibility, OpenRouter và Groq. Anthropic dùng Messages API. Adapter hỗ trợ **tool calling cơ bản**. Khi provider từ chối model hoặc hết quota, kiểm tra quyền truy cập, model ID và key. Xem tài liệu [OpenAI](https://developers.openai.com/api/docs/guides/function-calling), [Gemini](https://ai.google.dev/gemini-api/docs/openai), [Anthropic](https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works), [OpenRouter](https://openrouter.ai/docs/guides/features/tool-calling) và [Groq](https://console.groq.com/docs/tool-use/local-tool-calling).
 
 ## 2. Chạy thử
 

@@ -1,4 +1,4 @@
-"""Bốn provider cùng một interface. Không chứa agent loop."""
+"""Các provider dùng chung một interface. Không chứa agent loop."""
 import json
 import os
 import urllib.error
@@ -9,6 +9,7 @@ CONFIG = {
     'gemini': ('GEMINI_API_KEY', 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'),
     'openrouter': ('OPENROUTER_API_KEY', 'https://openrouter.ai/api/v1/chat/completions'),
     'anthropic': ('ANTHROPIC_API_KEY', 'https://api.anthropic.com/v1/messages'),
+    'groq': ('GROQ_API_KEY', 'https://api.groq.com/openai/v1/chat/completions'),
 }
 
 
@@ -47,10 +48,15 @@ class Provider:
         payload = {'model': self.model, 'messages': messages}
         if schemas:
             payload['tools'] = schemas
-        data = post_json(self.url, {'Authorization': f'Bearer {self.key}'}, payload)
+        headers = {'Authorization': f'Bearer {self.key}'}
+        if self.name == 'groq':
+            headers['User-Agent'] = 'StatusInvestigationLab/1.0'
+        data = post_json(self.url, headers, payload)
         choice = data['choices'][0]
         message = choice['message']
-        calls = [{'id': c['id'], 'name': c['function']['name'], 'arguments': c['function']['arguments']} for c in message.get('tool_calls', [])]
+        if self.name == 'groq':
+            message = {k: v for k, v in message.items() if k in ('role', 'content', 'tool_calls')}
+        calls = [{'id': c['id'], 'name': c['function']['name'], 'arguments': c['function']['arguments']} for c in message.get('tool_calls') or []]
         return {'message': message, 'calls': calls, 'finish': choice.get('finish_reason'), 'usage': data.get('usage', {})}
 
     def _anthropic(self, messages, schemas):
